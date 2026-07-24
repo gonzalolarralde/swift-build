@@ -72,6 +72,72 @@ fileprivate struct CustomTaskConstructionTests: CoreBasedTests {
     }
 
     @Test(.requireSDKs(.host))
+    func aggregateTargetCustomTasksFollowDependenciesAndCompleteTheTarget() async throws {
+        let libtoolPath = try await self.libtoolPath
+        let testProject = TestProject(
+            "aProject",
+            groupTree: TestGroup(
+                "Sources",
+                children: [
+                    TestFile("archive.c"),
+                ]),
+            buildConfigurations: [
+                TestBuildConfiguration(
+                    "Debug",
+                    buildSettings: [
+                        "PRODUCT_NAME": "$(TARGET_NAME)",
+                        "LIBTOOL": libtoolPath.str,
+                        "SDKROOT": "auto",
+                        "SUPPORTED_PLATFORMS": "$(AVAILABLE_PLATFORMS)",
+                    ]),
+            ],
+            targets: [
+                TestStandardTarget(
+                    "Archive", type: .staticLibrary,
+                    buildPhases: [
+                        TestSourcesBuildPhase(["archive.c"]),
+                    ]
+                ),
+                TestAggregateTarget(
+                    "Finalizer",
+                    customTasks: [
+                        TestCustomTask(
+                            commandLine: ["finalize", "$(BUILT_PRODUCTS_DIR)/libArchive.a"],
+                            environment: [:],
+                            workingDirectory: "$(SRCROOT)",
+                            executionDescription: "Finalize artifact",
+                            inputs: ["$(BUILT_PRODUCTS_DIR)/libArchive.a"],
+                            outputs: ["$(BUILT_PRODUCTS_DIR)/Firmware.uf2"],
+                            enableSandboxing: false,
+                            preparesForIndexing: false),
+                    ],
+                    dependencies: ["Archive"]
+                ),
+            ])
+        let tester = try await TaskConstructionTester(getCore(), testProject)
+        await tester.checkBuild(runDestination: .host, targetName: "Finalizer") { results in
+            results.checkNoDiagnostics()
+
+            results.checkTask(.matchTargetName("Finalizer"), .matchRulePattern(["CustomTask", "Finalize artifact", .any])) { customTask in
+                results.checkTaskFollows(
+                    customTask,
+                    .matchTargetName("Archive"),
+                    .matchRuleType("Gate"),
+                    .matchRuleItemPattern(.suffix("-end"))
+                )
+
+                results.checkTask(
+                    .matchTargetName("Finalizer"),
+                    .matchRuleType("Gate"),
+                    .matchRuleItemPattern(.suffix("-end"))
+                ) { targetEndTask in
+                    results.checkTaskFollows(targetEndTask, antecedent: customTask)
+                }
+            }
+        }
+    }
+
+    @Test(.requireSDKs(.host))
     func customTasksAreIndependent() async throws {
         let testProject = TestProject(
             "aProject",
