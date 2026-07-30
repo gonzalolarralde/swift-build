@@ -49,20 +49,25 @@ final class CustomTaskProducer: PhasedTaskProducer, TaskProducer {
                 var outputs: [any PlannedNode] = outputPaths.map { delegate.createNode($0) }
 
                 let md5Context = InsecureHashContext()
+                md5Context.add(string: "command-line")
                 for arg in commandLine {
                     md5Context.add(string: arg)
                     md5Context.add(number: 0)
                 }
                 md5Context.add(number: 1)
+                md5Context.add(string: "environment")
                 environment.computeSignature(into: md5Context)
                 md5Context.add(number: 1)
+                md5Context.add(string: "working-directory")
                 md5Context.add(string: workingDirectory.str)
                 md5Context.add(number: 1)
+                md5Context.add(string: "input-files")
                 for input in inputPaths {
                     md5Context.add(string: input.str)
                     md5Context.add(number: 0)
                 }
                 md5Context.add(number: 1)
+                md5Context.add(string: "output-files")
                 for output in outputPaths {
                     md5Context.add(string: output.str)
                     md5Context.add(number: 0)

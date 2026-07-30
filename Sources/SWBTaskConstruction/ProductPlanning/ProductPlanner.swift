@@ -457,7 +457,15 @@ extension AggregateTarget
     func aggregateTargetTaskProducers(_ taskProducerContext: TargetTaskProducerContext) -> [any TaskProducer]
     {
         // TODO: We should probably check that only build phases useful in an aggregate target are present here.
-        return super.buildPhaseTargetTaskProducers(taskProducerContext).taskProducers
+        let (buildPhaseTaskProducers, buildPhasesEndNode) = super.buildPhaseTargetTaskProducers(taskProducerContext)
+        let customTasksEndNode = taskProducerContext.createVirtualNode("\(phaseNodeRoot(taskProducerContext.configuredTarget))-CustomTaskProducer")
+        return buildPhaseTaskProducers + [
+            CustomTaskProducer(
+                taskProducerContext,
+                phaseStartNodes: [buildPhasesEndNode],
+                phaseEndNode: customTasksEndNode
+            )
+        ]
     }
 }
 
